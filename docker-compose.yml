@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: MindForge-postgres
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: MindForge
+      POSTGRES_PASSWORD: MindForge
+      POSTGRES_DB: mind-forge
+    volumes:
+      # Postgres 18+ 要求挂载到 /var/lib/postgresql（不是 .../data）
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:
