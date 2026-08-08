@@ -1,0 +1,16 @@
+{
+  "java.compile.nullAnalysis.mode": "automatic",
+  "editor.tabSize": 2,
+  "editor.indentSize": "tabSize",
+  "editor.detectIndentation": false,
+  "[java]": {
+    "editor.tabSize": 4
+  },
+  "[typescript]": {
+    "editor.tabSize": 2
+  },
+  "[javascript]": {
+    "editor.tabSize": 2
+  },
+  "java.configuration.updateBuildConfiguration": "interactive"
+}

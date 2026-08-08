@@ -18,39 +18,39 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-  private final AuthenticationManager authenticationManager;
-  private final SecurityContextRepository securityContextRepository;
+    private final AuthenticationManager authenticationManager;
+    private final SecurityContextRepository securityContextRepository;
 
-  public AuthController(AuthenticationManager authenticationManager,
-      SecurityContextRepository securityContextRepository) {
-    this.authenticationManager = authenticationManager;
-    this.securityContextRepository = securityContextRepository;
-  }
+    public AuthController(AuthenticationManager authenticationManager,
+            SecurityContextRepository securityContextRepository) {
+        this.authenticationManager = authenticationManager;
+        this.securityContextRepository = securityContextRepository;
+    }
 
-  @PostMapping("/login")
-  public CurrentUserResponse login(@Valid @RequestBody LoginRequest request,
-      HttpServletRequest httpRequest,
-      HttpServletResponse httpResponse) {
-    Authentication authenticationRequest = UsernamePasswordAuthenticationToken.unauthenticated(request.email(),
-        request.password());
+    @PostMapping("/login")
+    public CurrentUserResponse login(@Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        Authentication authenticationRequest = UsernamePasswordAuthenticationToken.unauthenticated(request.email(),
+                request.password());
 
-    Authentication authentication = authenticationManager.authenticate(authenticationRequest);
+        Authentication authentication = authenticationManager.authenticate(authenticationRequest);
 
-    var context = SecurityContextHolder.createEmptyContext();
-    context.setAuthentication(authentication);
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
 
-    SecurityContextHolder.setContext(context);
+        SecurityContextHolder.setContext(context);
 
-    securityContextRepository.saveContext(context, httpRequest, httpResponse);
+        securityContextRepository.saveContext(context, httpRequest, httpResponse);
 
-    System.out.println("authentication: " + authentication.getPrincipal().toString());
+        System.out.println("authentication: " + authentication.getPrincipal().toString());
 
-    return CurrentUserResponse.from((AuthenticatedUser) authentication.getPrincipal());
-  }
+        return CurrentUserResponse.from((AuthenticatedUser) authentication.getPrincipal());
+    }
 
-  @GetMapping("/me")
-  public CurrentUserResponse me(Authentication authentication) {
-    var principal =(AuthenticatedUser) authentication.getPrincipal();
-    return CurrentUserResponse.from(principal);
-  }
+    @GetMapping("/me")
+    public CurrentUserResponse me(Authentication authentication) {
+        var principal = (AuthenticatedUser) authentication.getPrincipal();
+        return CurrentUserResponse.from(principal);
+    }
 }
