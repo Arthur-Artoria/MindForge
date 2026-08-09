@@ -1,6 +1,5 @@
 package cn.artoria.mind_forge.auth;
 
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
