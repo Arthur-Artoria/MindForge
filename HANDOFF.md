@@ -2,12 +2,13 @@
 
 ## Purpose
 
-Continue development of the MindForge authentication flow on another computer. The immediate goal is to turn the current runnable Spring Security skeleton into a verified Session-based REST login flow, then connect it to the Next.js client.
+Continue development of MindForge on another computer. The immediate goal is to finish the Session authentication security lifecycle, then implement the first Note vertical slice.
 
 For product scope and acceptance requirements, read:
 
 - `docs/developer-knowledge-hub-prd.md`
 - `docs/design.md`
+- `docs/backend-development-plan.md` (current execution order and checklists)
 
 Do not redesign the product from this handoff; those documents remain the source of truth.
 
@@ -15,8 +16,7 @@ Do not redesign the product from this handoff; those documents remain the source
 
 - Repository: `https://github.com/Arthur-Artoria/MindForge.git`
 - Branch: `main`
-- Commit: `fed7342` (`feat: add Spring Security and validation dependencies to backend`)
-- Working tree was clean before this `HANDOFF.md` was created.
+- Plan snapshot: branch `main`, commit `05cbf14` on 2026-08-10. Run `git log -1 --oneline` after pulling instead of assuming this commit is still current.
 - Backend test command passed on 2026-08-07:
 
   ```powershell
@@ -26,7 +26,7 @@ Do not redesign the product from this handoff; those documents remain the source
 
   Result: `BUILD SUCCESSFUL`.
 
-`HANDOFF.md` itself is the only expected new workspace change after generation.
+After pulling a committed handoff update, the working tree should be clean before new development begins.
 
 ## Runtime and setup
 
@@ -149,35 +149,28 @@ UserRepository
 
   ```java
   .csrf(csrf -> csrf
-      .ignoringRequestMatchers("/api/auth/login"))
+      .ignoringRequestMatchers("/api/auth/login", "/api/auth/logout"))
   ```
 
   This is only a temporary development step to reach and test the controller. It is not the intended final browser security design.
 
-## Not yet verified
+## Current test coverage and remaining verification
 
-Do not claim the login feature is complete until the following full acceptance loop has been tested against a known database user:
+Authentication tests now cover:
 
-1. Correct email/password returns HTTP 200 and a session cookie.
-2. Wrong credentials return a generic JSON HTTP 401 without revealing whether the email exists.
-3. `GET /api/auth/me` with the cookie returns the authenticated user.
-4. `POST /api/auth/logout` invalidates the session.
-5. `/api/auth/me` with the old cookie then returns HTTP 401.
+1. Correct login followed by authenticated `/api/auth/me` using the same Session.
+2. Wrong credentials returning a generic JSON HTTP 401.
+3. Unauthenticated `/api/auth/me` returning a JSON HTTP 401.
 
-There is currently only a context-load test. No authentication integration tests have been added.
+The following still need verification before authentication is considered complete:
+
+1. `POST /api/auth/logout` invalidates the Session and the old Session then receives 401 from `/api/auth/me`.
+2. A pre-login Session ID changes on successful authentication to prevent session fixation.
+3. A real SPA-style CSRF token acquisition and refresh flow works without ignoring login/logout.
 
 ## Known gaps and next work
 
-Work in this order:
-
-1. **Add authentication integration tests.** Add Spring Security test support if needed. Cover the five-step acceptance loop above before expanding the feature.
-2. **Finish CSRF for the SPA.** Replace the login ignore rule with a permitted CSRF-token endpoint (for example `GET /api/auth/csrf`). The frontend must preserve the session cookie and send the returned CSRF token header on unsafe requests. Refresh the token after login and logout as required by Spring Security.
-3. **Restore the complete session authentication lifecycle.** The manual controller currently saves the `SecurityContext`, but it does not invoke a `SessionAuthenticationStrategy`; session fixation protection must be handled. Consider whether a filter-based JSON authentication flow would let Spring Security own more of this lifecycle.
-4. **Return structured REST errors.** Configure an `AuthenticationEntryPoint` for JSON 401 responses and an `AccessDeniedHandler` for JSON 403 responses. Map authentication failures consistently.
-5. **Configure frontend integration together.** Design CORS, `credentials: "include"`, cookie `HttpOnly`/`Secure`/`SameSite`, allowed origins, and CSRF as one deployment-aware decision. Do not configure these independently.
-6. **Review password encoding before changing it.** The project currently uses `BCryptPasswordEncoder`. Switching to `PasswordEncoderFactories.createDelegatingPasswordEncoder()` changes stored output to an `{id}...` format; existing unprefixed BCrypt hashes require an explicit migration or compatibility plan.
-7. **Normalize email consistently.** Login lowercases email, but registration/bootstrap and the database uniqueness rule must use the same normalization. PostgreSQL's current unique constraint on raw email is case-sensitive.
-8. **Cleanup after behavior is locked down.** Remove the unused `DaoAuthenticationConfigurer` import, replace/remove `System.out.println`, and apply formatting.
+The authoritative implementation order, mutable status, and acceptance checklists are maintained only in `docs/backend-development-plan.md`. Keep this handoff focused on stable context so the two documents do not drift.
 
 ## Failure boundaries to preserve
 
@@ -197,4 +190,4 @@ Work in this order:
 
 ## Recommended first action on the new computer
 
-Start PostgreSQL, run the existing tests, inspect `SecurityConfig.java` and `AuthController.java`, then add one integration test that proves a correct login returns a session cookie and that the same cookie authenticates `/api/auth/me`. This provides the tight feedback loop needed before changing CSRF or session behavior.
+Pull the latest branch, start PostgreSQL, run the existing tests, then read `docs/backend-development-plan.md`. Resume from its first unchecked item; currently that should be the full login -> me -> logout -> old Session receives 401 integration test.
