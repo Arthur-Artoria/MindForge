@@ -83,9 +83,57 @@ public class AuthSessionIntegrationTests {
     }
 
     @Test
-    void meWithoutValidSessionReturnsJson401() throws Exception {
-        mockMvc.perform(get("/api/auth/me"))
-                .andExpect(status().isUnauthorized())
+    void logoutThenMeReturnsJson401() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String email = "test" + suffix + "@example.com";
+        String username = "test" + suffix;
+        String password = "correct-password";
+
+        jdbcTemplate.update(
+                """
+                        INSERT INTO users (email, username, password_hash)
+                        VALUES (?, ?, ?)
+                        """,
+                email,
+                username,
+                passwordEncoder.encode(password));
+
+        // 登录
+        MvcResult loginResult = mockMvc.perform(
+                post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                    {
+                                        "email": "%s",
+                                        "password": "%s"
+                                    }
+                                """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.username").value(username))
+                .andReturn();
+
+        // 取得登录后的 Session
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+
+        assertNotNull(session);
+
+        // 携带登录产生的同一个 Session 访问 /api/auth/me
+        mockMvc.perform(get("/api/auth/me")
+                .session(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.username").value(username));
+
+        // 登出
+        mockMvc.perform(post("/api/auth/logout")
+                .with(csrf())
+                .session(session))
+                .andExpect(status().isNoContent());
+
+        // 携带登出后的 Session 访问 /api/auth/me
+        mockMvc.perform(get("/api/auth/me")
+                .session(session)).andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
                 .andExpect(jsonPath("$.message").value("请先登录"));

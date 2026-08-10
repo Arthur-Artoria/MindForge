@@ -24,7 +24,7 @@ public class MindForgeApplication {
 
 	@GetMapping("/hello")
 	public String hello(@RequestParam(value = "name", defaultValue = "World") String name) {
-		return String.format("Hello %s!", passwordEncoder.encode("123456"));
+		return String.format("Hello %s!", name);
 		// passwordEncoder.encode("123456")
 	}
 
