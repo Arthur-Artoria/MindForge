@@ -92,11 +92,11 @@ POST /api/auth/logout
 
 #### A4. 阶段 A 完成标准
 
-- [ ] login、me、logout 完整生命周期测试通过。
-- [ ] session fixation protection 测试通过。
-- [ ] login、logout 和至少一个业务写接口不再绕过 CSRF。
-- [ ] 401 与 403 都返回约定的 JSON 错误结构。
-- [ ] 删除 `AuthController` 中的 `System.out.println`。
+- [x] login、me、logout 完整生命周期测试通过。
+- [x] session fixation protection 测试通过。
+- [x] login 和 logout 不再绕过 CSRF。
+- [x] 401 与 403 都返回约定的 JSON 错误结构。
+- [x] 删除 `AuthController` 中的 `System.out.println`。
 
 ### 阶段 B：Note 第一个纵向切片
 
