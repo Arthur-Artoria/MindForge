@@ -66,11 +66,12 @@ AuthenticationManager.authenticate(...)
 
 #### A3. 完成 SPA CSRF 流程
 
-- [ ] 增加允许匿名访问的 token 获取接口，例如 `GET /api/auth/csrf`。
-- [ ] 移除 login/logout 的 CSRF ignore 规则。
-- [ ] login 和 logout 必须携带有效 CSRF token。
-- [ ] 登录成功和退出成功后重新获取 token；旧 token 不得继续使用。
-- [ ] 为缺失或错误 token 的请求返回稳定的 JSON 403。
+- [x] 增加允许匿名访问的 token 获取接口，例如 `GET /api/auth/csrf`。
+- [x] 移除 login/logout 的 CSRF ignore 规则。
+- [x] login 和 logout 必须携带有效 CSRF token。
+- [x] 登录成功和退出成功后重新获取 token；旧 token 不得继续使用。
+- [x] 为缺失或错误 token 的请求返回稳定的 JSON 403。
+- [x] 补充端到端测试。
 
 目标请求流程：
 

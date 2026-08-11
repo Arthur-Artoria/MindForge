@@ -21,13 +21,19 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import jakarta.transaction.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
 public class AuthSessionIntegrationTests {
+
+    private static final String TEST_PASSWORD = "correct-password";
 
     @Autowired
     private MockMvc mockMvc;
@@ -38,166 +44,181 @@ public class AuthSessionIntegrationTests {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Test
     void loginThenMeUsesTheSameSession() throws Exception {
-        String suffix = UUID.randomUUID().toString();
-        String email = "test" + suffix + "@example.com";
-        String username = "test" + suffix;
-        String password = "correct-password";
+        TestUser user = createTestUser();
 
-        jdbcTemplate.update(
-                """
-                        INSERT INTO users (email, username, password_hash)
-                        VALUES (?, ?, ?)
-                        """,
-                email,
-                username,
-                passwordEncoder.encode(password));
+        MockHttpSession session = loginWithTestCsrf(user);
 
-        // 登录
-        MvcResult loginResult = mockMvc.perform(
-                post("/api/auth/login")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                    {
-                                        "email": "%s",
-                                        "password": "%s"
-                                    }
-                                """.formatted(email, password)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.username").value(username))
-                .andReturn();
-
-        // 取得登录后的 Session
-        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
-
-        assertNotNull(session);
-
-        // 携带登录产生的同一个 Session 访问 /api/auth/me
-        mockMvc.perform(get("/api/auth/me")
-                .session(session)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.username").value(username));
-
+        expectCurrentUser(session, user);
     }
 
     @Test
     void logoutThenMeReturnsJson401() throws Exception {
-        String suffix = UUID.randomUUID().toString();
-        String email = "test" + suffix + "@example.com";
-        String username = "test" + suffix;
-        String password = "correct-password";
+        TestUser user = createTestUser();
+        MockHttpSession session = loginWithTestCsrf(user);
+        expectCurrentUser(session, user);
 
-        jdbcTemplate.update(
-                """
-                        INSERT INTO users (email, username, password_hash)
-                        VALUES (?, ?, ?)
-                        """,
-                email,
-                username,
-                passwordEncoder.encode(password));
-
-        // 登录
-        MvcResult loginResult = mockMvc.perform(
-                post("/api/auth/login")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                    {
-                                        "email": "%s",
-                                        "password": "%s"
-                                    }
-                                """.formatted(email, password)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.username").value(username))
-                .andReturn();
-
-        // 取得登录后的 Session
-        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
-
-        assertNotNull(session);
-
-        // 携带登录产生的同一个 Session 访问 /api/auth/me
-        mockMvc.perform(get("/api/auth/me")
-                .session(session)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.username").value(username));
-
-        // 登出
         mockMvc.perform(post("/api/auth/logout")
                 .with(csrf())
                 .session(session))
                 .andExpect(status().isNoContent());
 
-        // 携带登出后的 Session 访问 /api/auth/me
-        mockMvc.perform(get("/api/auth/me")
-                .session(session)).andExpect(status().isUnauthorized())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
-                .andExpect(jsonPath("$.message").value("请先登录"));
-
+        expectAuthenticationRequired(session);
     }
 
-    /**
-     * 登录前已有匿名 session，登录成功后轮换已有 Session 的 ID，并保留认证状态，并且能够使用 /api/auth/me 获取到用户信息
-     */
     @Test
     void loginChangesExistingSessionIdAndPreservesAuthentication() throws Exception {
-        // 创建一个匿名 session
         MockHttpSession anonymousSession = new MockHttpSession();
         String sessionIdBeforeLogin = anonymousSession.getId();
+        TestUser user = createTestUser();
 
-        // 创建一个用户
+        MockHttpSession authenticatedSession = loginWithTestCsrf(user, anonymousSession);
+
+        assertNotEquals(sessionIdBeforeLogin, authenticatedSession.getId());
+        expectCurrentUser(authenticatedSession, user);
+    }
+
+    @Test
+    void csrfTokenLifecycleAcrossLoginAndLogout() throws Exception {
+        TestUser user = createTestUser();
+        CsrfSession anonymousCsrf = fetchCsrfSession();
+
+        expectCsrfForbidden(mockMvc.perform(loginRequest(user, anonymousCsrf.session())));
+        expectCsrfForbidden(mockMvc.perform(
+                loginRequest(user, anonymousCsrf.session())
+                        .header(anonymousCsrf.headerName(), "invalid-csrf-token")));
+
+        loginSuccessfully(anonymousCsrf.applyTo(loginRequest(user)), user);
+
+        expectCsrfForbidden(mockMvc.perform(
+                anonymousCsrf.applyTo(post("/api/auth/logout"))));
+
+        CsrfSession authenticatedCsrf = fetchCsrfSession(anonymousCsrf.session());
+        mockMvc.perform(authenticatedCsrf.applyTo(post("/api/auth/logout")))
+                .andExpect(status().isNoContent());
+
+        CsrfSession postLogoutCsrf = fetchCsrfSession();
+        expectCsrfForbidden(mockMvc.perform(
+                loginRequest(user, postLogoutCsrf.session())
+                        .header(postLogoutCsrf.headerName(), authenticatedCsrf.token())));
+
+        loginSuccessfully(postLogoutCsrf.applyTo(loginRequest(user)), user);
+    }
+
+    private TestUser createTestUser() {
         String suffix = UUID.randomUUID().toString();
-        String email = "test" + suffix + "@example.com";
-        String username = "test" + suffix;
-        String password = "correct-password";
+        TestUser user = new TestUser(
+                "test" + suffix + "@example.com",
+                "test" + suffix,
+                TEST_PASSWORD);
 
         jdbcTemplate.update(
                 """
                         INSERT INTO users (email, username, password_hash)
                         VALUES (?, ?, ?)
                         """,
-                email,
-                username,
-                passwordEncoder.encode(password));
+                user.email(),
+                user.username(),
+                passwordEncoder.encode(user.password()));
 
-        // 携带匿名 session 访问 login
-        // 登录
-        MvcResult loginResult = mockMvc.perform(
-                post("/api/auth/login")
-                        .with(csrf())
-                        .session(anonymousSession)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                    {
-                                        "email": "%s",
-                                        "password": "%s"
-                                    }
-                                """.formatted(email, password)))
+        return user;
+    }
+
+    private MockHttpSession loginWithTestCsrf(TestUser user) throws Exception {
+        return sessionFrom(loginSuccessfully(loginRequest(user).with(csrf()), user));
+    }
+
+    private MockHttpSession loginWithTestCsrf(TestUser user, MockHttpSession session) throws Exception {
+        return sessionFrom(loginSuccessfully(loginRequest(user, session).with(csrf()), user));
+    }
+
+    private MvcResult loginSuccessfully(MockHttpServletRequestBuilder request, TestUser user) throws Exception {
+        return mockMvc.perform(request)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.username").value(username))
+                .andExpect(jsonPath("$.email").value(user.email()))
+                .andExpect(jsonPath("$.username").value(user.username()))
+                .andReturn();
+    }
+
+    private CsrfSession fetchCsrfSession() throws Exception {
+        return fetchCsrfSession(get("/api/auth/csrf"));
+    }
+
+    private CsrfSession fetchCsrfSession(MockHttpSession session) throws Exception {
+        return fetchCsrfSession(get("/api/auth/csrf").session(session));
+    }
+
+    private CsrfSession fetchCsrfSession(MockHttpServletRequestBuilder request) throws Exception {
+        MvcResult result = mockMvc.perform(request)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.headerName").value("X-CSRF-TOKEN"))
+                .andExpect(jsonPath("$.token").isNotEmpty())
                 .andReturn();
 
-        // 取得登录后的 Session
-        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        return new CsrfSession(
+                body.get("headerName").asString(),
+                body.get("token").asString(),
+                sessionFrom(result));
+    }
 
-        // 断言登录后的新 session 不为空
-        assertNotNull(session);
-        String sessionIdAfterLogin = session.getId();
-
-        // 断言登录后的新 session 与匿名 session 不同
-        assertNotEquals(sessionIdBeforeLogin, sessionIdAfterLogin);
-
-        // 携带登录后的 Session 访问 /api/auth/me
-        mockMvc.perform(get("/api/auth/me")
-                .session(session))
+    private void expectCurrentUser(MockHttpSession session, TestUser user) throws Exception {
+        mockMvc.perform(get("/api/auth/me").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.username").value(username));
+                .andExpect(jsonPath("$.email").value(user.email()))
+                .andExpect(jsonPath("$.username").value(user.username()));
+    }
+
+    private void expectAuthenticationRequired(MockHttpSession session) throws Exception {
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
+                .andExpect(jsonPath("$.message").value("请先登录"));
+    }
+
+    private static MockHttpServletRequestBuilder loginRequest(TestUser user) {
+        return post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                            {
+                                "email": "%s",
+                                "password": "%s"
+                            }
+                        """.formatted(user.email(), user.password()));
+    }
+
+    private static MockHttpServletRequestBuilder loginRequest(TestUser user, MockHttpSession session) {
+        return loginRequest(user).session(session);
+    }
+
+    private static MockHttpSession sessionFrom(MvcResult result) {
+        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
+        assertNotNull(session);
+        return session;
+    }
+
+    private static void expectCsrfForbidden(ResultActions resultActions) throws Exception {
+        resultActions
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("CSRF_TOKEN_INVALID"))
+                .andExpect(jsonPath("$.message").value("CSRF token 缺失或无效"));
+    }
+
+    private record TestUser(String email, String username, String password) {
+    }
+
+    private record CsrfSession(String headerName, String token, MockHttpSession session) {
+
+        MockHttpServletRequestBuilder applyTo(MockHttpServletRequestBuilder request) {
+            return request
+                    .header(headerName, token)
+                    .session(session);
+        }
     }
 }

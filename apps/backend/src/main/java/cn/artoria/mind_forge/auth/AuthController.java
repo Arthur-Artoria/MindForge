@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,15 +41,13 @@ public class AuthController {
 
         Authentication authentication = authenticationManager.authenticate(authenticationRequest);
 
+        // 更新 Session ID
         sessionAuthenticationStrategy.onAuthentication(authentication, httpRequest, httpResponse);
 
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
-
         securityContextRepository.saveContext(context, httpRequest, httpResponse);
-
-        System.out.println("authentication: " + authentication.getPrincipal().toString());
 
         return CurrentUserResponse.from((AuthenticatedUser) authentication.getPrincipal());
     }
@@ -57,5 +56,10 @@ public class AuthController {
     public CurrentUserResponse me(Authentication authentication) {
         var principal = (AuthenticatedUser) authentication.getPrincipal();
         return CurrentUserResponse.from(principal);
+    }
+
+    @GetMapping("/csrf")
+    public CsrfTokenResponse csrf(CsrfToken csrfToken) {
+        return new CsrfTokenResponse(csrfToken.getHeaderName(), csrfToken.getToken());
     }
 }
