@@ -59,12 +59,10 @@ AuthenticationManager.authenticate(...)
   -> SecurityContextRepository.saveContext(...)
 ```
 
-这条自定义认证路径尚未调用 `SessionAuthenticationStrategy`。
-
-- [ ] 在认证成功时执行适当的 `SessionAuthenticationStrategy`。
-- [ ] 保留默认的 session fixation protection，优先使用 Servlet 容器的 `changeSessionId` 行为。
-- [ ] 增加测试：如果登录前已有 Session，登录成功后 Session ID 必须发生变化，同时认证状态仍可由 `/me` 读取。
-- [ ] 在继续使用 controller 登录与改成 Spring Security filter 登录之间做一次明确选择；当前可以先用最小改动补齐生命周期，不必为了重构阻塞功能开发。
+- [x] 在认证成功时执行适当的 `SessionAuthenticationStrategy`。
+- [x] 保留默认的 session fixation protection，优先使用 Servlet 容器的 `changeSessionId` 行为。
+- [x] 增加测试：如果登录前已有 Session，登录成功后 Session ID 必须发生变化，同时认证状态仍可由 `/me` 读取。
+- [x] 在继续使用 controller 登录与改成 Spring Security filter 登录之间做一次明确选择；当前可以先用最小改动补齐生命周期，不必为了重构阻塞功能开发。
 
 #### A3. 完成 SPA CSRF 流程
 

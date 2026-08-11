@@ -1,5 +1,6 @@
 package cn.artoria.mind_forge.auth;
 
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -138,5 +139,65 @@ public class AuthSessionIntegrationTests {
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
                 .andExpect(jsonPath("$.message").value("请先登录"));
 
+    }
+
+    /**
+     * 登录前已有匿名 session，登录成功后轮换已有 Session 的 ID，并保留认证状态，并且能够使用 /api/auth/me 获取到用户信息
+     */
+    @Test
+    void loginChangesExistingSessionIdAndPreservesAuthentication() throws Exception {
+        // 创建一个匿名 session
+        MockHttpSession anonymousSession = new MockHttpSession();
+        String sessionIdBeforeLogin = anonymousSession.getId();
+
+        // 创建一个用户
+        String suffix = UUID.randomUUID().toString();
+        String email = "test" + suffix + "@example.com";
+        String username = "test" + suffix;
+        String password = "correct-password";
+
+        jdbcTemplate.update(
+                """
+                        INSERT INTO users (email, username, password_hash)
+                        VALUES (?, ?, ?)
+                        """,
+                email,
+                username,
+                passwordEncoder.encode(password));
+
+        // 携带匿名 session 访问 login
+        // 登录
+        MvcResult loginResult = mockMvc.perform(
+                post("/api/auth/login")
+                        .with(csrf())
+                        .session(anonymousSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                    {
+                                        "email": "%s",
+                                        "password": "%s"
+                                    }
+                                """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.username").value(username))
+                .andReturn();
+
+        // 取得登录后的 Session
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+
+        // 断言登录后的新 session 不为空
+        assertNotNull(session);
+        String sessionIdAfterLogin = session.getId();
+
+        // 断言登录后的新 session 与匿名 session 不同
+        assertNotEquals(sessionIdBeforeLogin, sessionIdAfterLogin);
+
+        // 携带登录后的 Session 访问 /api/auth/me
+        mockMvc.perform(get("/api/auth/me")
+                .session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.username").value(username));
     }
 }

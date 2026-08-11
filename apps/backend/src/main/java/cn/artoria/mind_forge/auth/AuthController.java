@@ -4,6 +4,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,11 +21,14 @@ import jakarta.validation.Valid;
 public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
+    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
 
     public AuthController(AuthenticationManager authenticationManager,
-            SecurityContextRepository securityContextRepository) {
+            SecurityContextRepository securityContextRepository,
+            SessionAuthenticationStrategy sessionAuthenticationStrategy) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
+        this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
     }
 
     @PostMapping("/login")
@@ -36,9 +40,10 @@ public class AuthController {
 
         Authentication authentication = authenticationManager.authenticate(authenticationRequest);
 
+        sessionAuthenticationStrategy.onAuthentication(authentication, httpRequest, httpResponse);
+
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
-
         SecurityContextHolder.setContext(context);
 
         securityContextRepository.saveContext(context, httpRequest, httpResponse);
