@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import java.util.UUID;
 
@@ -15,6 +16,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
@@ -103,6 +105,22 @@ public final class AuthTestHelper {
 
     public MockHttpServletRequestBuilder loginRequest(TestUser user, MockHttpSession session) {
         return loginRequest(user).session(session);
+    }
+
+    public void expectAuthenticationRequired(ResultActions resultActions) throws Exception {
+        resultActions
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
+                .andExpect(jsonPath("$.message").value("请先登录"));
+    }
+
+    public void expectCsrfForbidden(ResultActions resultActions) throws Exception {
+        resultActions
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("CSRF_TOKEN_INVALID"))
+                .andExpect(jsonPath("$.message").value("CSRF token 缺失或无效"));
     }
 
     private CsrfSession fetchCsrfSession(MockHttpServletRequestBuilder request) throws Exception {

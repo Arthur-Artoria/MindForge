@@ -109,19 +109,19 @@ GET  /api/notes/{id}
 
 #### B1. Module 与所有权规则
 
-- [ ] 请求 DTO 不允许接收 `userId`。
-- [ ] `userId` 只能从后端 `AuthenticatedUser` / `SecurityContext` 推导。
-- [ ] Note 查询在 Repository seam 上同时约束 `noteId` 和 `userId`，例如 `findByIdAndUserId(...)`。
-- [ ] 其他用户访问不属于自己的 Note 时返回 404，避免暴露资源是否存在。
+- [x] 请求 DTO 不允许接收 `userId`。
+- [x] `userId` 只能从后端 `AuthenticatedUser` / `SecurityContext` 推导。
+- [x] Note 查询在 Repository seam 上同时约束 `noteId` 和 `userId`，例如 `findByIdAndUserId(...)`。
+- [x] 其他用户访问不属于自己的 Note 时返回 404，避免暴露资源是否存在。
 
 #### B2. 第一个切片的验收测试
 
-- [ ] 未登录创建 Note：401。
-- [ ] 已登录但缺少 CSRF token：403。
-- [ ] 已登录且 CSRF token 有效：创建成功，返回 201。
-- [ ] 当前用户读取自己的 Note：200。
-- [ ] 用户 B 读取用户 A 的 Note：404。
-- [ ] 数据库中的 `user_id` 来自登录用户，而不是请求体。
+- [x] 未登录创建 Note：401。
+- [x] 已登录但缺少 CSRF token：403。
+- [x] 已登录且 CSRF token 有效：创建成功，返回 201。
+- [x] 当前用户读取自己的 Note：200。
+- [x] 用户 B 读取用户 A 的 Note：404。
+- [x] 数据库中的 `user_id` 来自登录用户，而不是请求体。
 
 #### B3. 后续 CRUD 顺序
 

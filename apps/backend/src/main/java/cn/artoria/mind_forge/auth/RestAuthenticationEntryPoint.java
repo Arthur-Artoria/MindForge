@@ -3,7 +3,6 @@ package cn.artoria.mind_forge.auth;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
