@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Continue development of MindForge on another computer. The immediate goal is to finish the Session authentication security lifecycle, then implement the first Note vertical slice.
+Continue development of MindForge on another computer. The immediate goal is to connect the existing Session/CSRF and Note APIs to the Next.js client and complete the first browser-visible vertical slice.
 
 For product scope and acceptance requirements, read:
 
 - `docs/developer-knowledge-hub-prd.md`
 - `docs/design.md`
-- `docs/backend-development-plan.md` (current execution order and checklists)
+- `docs/development-plan.md` (current execution order and checklists)
 
 Do not redesign the product from this handoff; those documents remain the source of truth.
 
@@ -16,8 +16,8 @@ Do not redesign the product from this handoff; those documents remain the source
 
 - Repository: `https://github.com/Arthur-Artoria/MindForge.git`
 - Branch: `main`
-- Plan snapshot: branch `main`, commit `05cbf14` on 2026-08-10. Run `git log -1 --oneline` after pulling instead of assuming this commit is still current.
-- Backend test command passed on 2026-08-07:
+- Plan snapshot: branch `main`, commit `d7c670a` on 2026-08-14. Run `git log -1 --oneline` after pulling instead of assuming this commit is still current.
+- Backend test command passed on 2026-08-14. The generated test reports recorded 22 tests with no failures or errors, including 4 Auth Session/CSRF integration tests and 14 Note Controller integration tests:
 
   ```powershell
   cd apps/backend
@@ -101,11 +101,13 @@ Flyway owns the schema. See `apps/backend/src/main/resources/db/migration/`, esp
 - `CurrentUserResponse.java`
   - Safe response projection; does not expose the password hash.
 - `AuthController.java`
-  - Implements JSON login and `/me`.
-  - Calls `AuthenticationManager`, creates a `SecurityContext`, puts it in `SecurityContextHolder`, then saves it through `SecurityContextRepository`.
+  - Implements JSON login, `/me`, and CSRF token retrieval.
+  - Calls `AuthenticationManager`, executes the configured `SessionAuthenticationStrategy`, creates a `SecurityContext`, puts it in `SecurityContextHolder`, then saves it through `SecurityContextRepository`.
 - `SecurityConfig.java`
   - Builds the `SecurityFilterChain`, `AuthenticationManager`, `PasswordEncoder`, `UserDetailsService`, and `SecurityContextRepository`.
   - Configures logout through Spring Security's `LogoutFilter` rather than a controller method.
+  - Uses `ChangeSessionIdAuthenticationStrategy` for session-fixation protection and `CsrfAuthenticationStrategy` to invalidate the pre-login token.
+  - Uses `HttpSessionCsrfTokenRepository`; login and logout no longer bypass CSRF.
 
 ### Important Bean registration detail
 
@@ -132,45 +134,44 @@ UserRepository
 
 `SecurityConfig` creates and wires this mechanism at application startup. `AuthController` uses the resulting interfaces at request time; the two classes do not call each other directly.
 
+### Note module
+
+- `POST /api/notes`, `GET /api/notes`, `GET /api/notes/{id}`, `PUT /api/notes/{id}`, and `DELETE /api/notes/{id}` are implemented.
+- Note ownership always comes from `AuthenticatedUser`; request DTOs do not accept `userId`.
+- Repository queries constrain both `userId` and `deletedAt is null`. Cross-user access and access to deleted Notes return 404.
+- DELETE uses soft deletion. Flyway V6 added `deleted_at`, and V7 changed it to `timestamptz`; the previously used V2 migration was not modified.
+- Note Controller integration tests cover unauthenticated and missing-CSRF writes, validation, ownership, list filtering, update, delete, and post-delete invisibility.
+
 ## Verified behavior and diagnostics
 
 - PostgreSQL and Spring Boot can connect, Flyway migrations run, Hibernate validates the schema, and the backend context test passes.
 - `GET http://localhost:8080/hello` returned HTTP 200.
-- Before the current CSRF exception was added, `POST /api/auth/login` without a CSRF token returned:
+- `POST /api/auth/login` without a valid CSRF token is rejected before MVC with the stable JSON CSRF error response.
+- The SPA-style protocol verified by backend integration tests is:
 
-  ```http
-  HTTP/1.1 403
-  Content-Length: 0
-  Set-Cookie: JSESSIONID=...
+  ```text
+  GET /api/auth/csrf
+    -> POST /api/auth/login with the same Session and CSRF header
+    -> GET /api/auth/csrf again after login
+    -> authenticated API calls
+    -> POST /api/auth/logout with the current CSRF token
   ```
 
-  This was expected Spring Security behavior: `CsrfFilter` rejected the request before `AuthController`, so the controller log did not run. Apifox displayed an empty Body because the response body was zero bytes; the 403 was visible in response metadata.
-- `SecurityConfig` currently contains:
-
-  ```java
-  .csrf(csrf -> csrf
-      .ignoringRequestMatchers("/api/auth/login", "/api/auth/logout"))
-  ```
-
-  This is only a temporary development step to reach and test the controller. It is not the intended final browser security design.
-
-## Current test coverage and remaining verification
-
-Authentication tests now cover:
-
-1. Correct login followed by authenticated `/api/auth/me` using the same Session.
-2. Wrong credentials returning a generic JSON HTTP 401.
-3. Unauthenticated `/api/auth/me` returning a JSON HTTP 401.
-
-The following still need verification before authentication is considered complete:
-
-1. `POST /api/auth/logout` invalidates the Session and the old Session then receives 401 from `/api/auth/me`.
-2. A pre-login Session ID changes on successful authentication to prevent session fixation.
-3. A real SPA-style CSRF token acquisition and refresh flow works without ignoring login/logout.
+- Authentication tests verify login -> `/me` -> logout -> old Session receives 401, session ID rotation on login, the real CSRF token acquisition/refresh lifecycle, and stable JSON 401/403 responses.
+- Note tests verify authenticated creation with a real CSRF token, ownership isolation, CRUD behavior, soft deletion, and list filtering.
 
 ## Known gaps and next work
 
-The authoritative implementation order, mutable status, and acceptance checklists are maintained only in `docs/backend-development-plan.md`. Keep this handoff focused on stable context so the two documents do not drift.
+The authoritative implementation order, mutable status, and acceptance checklists are maintained only in `docs/development-plan.md`. Keep this handoff focused on stable context so the two documents do not drift.
+
+The current execution target is Phase C in that plan:
+
+1. Configure a Next.js same-origin rewrite/proxy for `/api/*`, with the backend origin supplied by environment configuration.
+2. Build the frontend API client and the real login -> CSRF refresh -> `/me` -> logout flow.
+3. Build the Notes list, create, edit, and delete pages against the existing backend API.
+4. Verify the flow in a browser, then run frontend lint/build and the backend test suite.
+
+The frontend is still the default Create Next App page. Before changing it, read `apps/web/AGENTS.md` and the relevant documentation bundled under `node_modules/next/dist/docs/`, because this repository uses Next.js 16.
 
 ## Failure boundaries to preserve
 
@@ -190,4 +191,4 @@ The authoritative implementation order, mutable status, and acceptance checklist
 
 ## Recommended first action on the new computer
 
-Pull the latest branch, start PostgreSQL, run the existing tests, then read `docs/backend-development-plan.md`. Resume from its first unchecked item; currently that should be the full login -> me -> logout -> old Session receives 401 integration test.
+Pull the latest branch, start PostgreSQL, run the existing tests, then read `docs/development-plan.md`. Resume from Phase C, beginning with the documented Next.js 16 rewrite/proxy decision and the frontend Session/CSRF API client.
