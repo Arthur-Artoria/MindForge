@@ -33,6 +33,9 @@ public class Note {
     @Column(insertable = false, updatable = false)
     private Instant updatedAt;
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     protected Note() {
     }
 
@@ -60,6 +63,10 @@ public class Note {
         return updatedAt;
     }
 
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
     protected Note(Long userId, String title, String content) {
         this.userId = userId;
         this.title = title;
@@ -73,5 +80,9 @@ public class Note {
     public void update(String title, String content) {
         this.title = title;
         this.content = content;
+    }
+
+    public void delete() {
+        this.deletedAt = Instant.now();
     }
 }

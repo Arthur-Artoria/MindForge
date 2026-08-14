@@ -1,12 +1,19 @@
 package cn.artoria.mind_forge.notes;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.Instant;
+
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import org.junit.jupiter.api.Test;
@@ -26,6 +33,7 @@ import cn.artoria.mind_forge.note.NoteResponse;
 import cn.artoria.mind_forge.support.AuthTestHelper;
 import cn.artoria.mind_forge.support.AuthTestHelper.CsrfSession;
 import cn.artoria.mind_forge.support.AuthTestHelper.TestUser;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -46,6 +54,9 @@ public class NoteControllerTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private EntityManager entityManager;
 
     /**
      * 未登录创建 Note 返回 401
@@ -203,6 +214,214 @@ public class NoteControllerTests {
         assertNotEquals(forgedUserId, storedUserId);
     }
 
+    /**
+     * Note 删除成功：204，并且是软删除
+     */
+    @Test
+    void deleteOwnNoteReturns204AndMarksItDeleted() throws Exception {
+        TestUser user = auth.createUser();
+        MockHttpSession session = auth.login(user);
+        CsrfSession authenticatedCsrf = auth.fetchCsrfSession(session);
+
+        MvcResult createNoteResult = createNote(authenticatedCsrf)
+                .andReturn();
+        NoteResponse noteResponse = objectMapper.readValue(createNoteResult.getResponse().getContentAsString(),
+                NoteResponse.class);
+        Long noteId = noteResponse.id();
+
+        authenticatedCsrf = auth.fetchCsrfSession(session);
+        mockMvc.perform(authenticatedCsrf.applyTo(delete("/api/notes/{noteId}", noteId)))
+                .andExpect(status().isNoContent());
+
+        entityManager.flush();
+
+        Instant deletedAt = jdbcTemplate.queryForObject(
+                "SELECT deleted_at FROM notes WHERE id = ?",
+                Instant.class,
+                noteId);
+
+        assertNotNull(deletedAt);
+    }
+
+    /**
+     * 删除成功后查询不可见
+     */
+    @Test
+    void afterDeletingOwnNoteItIsInvisible() throws Exception {
+        TestUser user = auth.createUser();
+        MockHttpSession session = auth.login(user);
+        CsrfSession authenticatedCsrf = auth.fetchCsrfSession(session);
+
+        MvcResult createNoteResult = createNote(authenticatedCsrf)
+                .andReturn();
+        NoteResponse noteResponse = objectMapper.readValue(createNoteResult.getResponse().getContentAsString(),
+                NoteResponse.class);
+        Long noteId = noteResponse.id();
+
+        mockMvc.perform(authenticatedCsrf.applyTo(delete("/api/notes/{noteId}", noteId)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(authenticatedCsrf.applyTo(get("/api/notes/{noteId}", noteId)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * 不能删除他人的 Note
+     */
+    @Test
+    void cannotDeleteOtherUsersNote() throws Exception {
+        TestUser userA = auth.createUser();
+        MockHttpSession sessionA = auth.login(userA);
+        CsrfSession authenticatedCsrfA = auth.fetchCsrfSession(sessionA);
+        MvcResult createNoteResultA = createNote(authenticatedCsrfA).andReturn();
+        NoteResponse noteResponse = objectMapper.readValue(createNoteResultA.getResponse().getContentAsString(),
+                NoteResponse.class);
+        Long noteId = noteResponse.id();
+
+        TestUser userB = auth.createUser();
+        MockHttpSession sessionB = auth.login(userB);
+        CsrfSession authenticatedCsrfB = auth.fetchCsrfSession(sessionB);
+
+        mockMvc.perform(authenticatedCsrfB.applyTo(delete("/api/notes/{noteId}", noteId)))
+                .andExpect(status().isNotFound());
+
+        Instant deletedAt = jdbcTemplate.queryForObject(
+                "SELECT deleted_at FROM notes WHERE id = ?",
+                Instant.class,
+                noteId);
+
+        assertNull(deletedAt);
+    }
+
+    /**
+     * 更新成功
+     * 
+     * @return
+     * @throws Exception
+     */
+    @Test
+    void updateOwnNoteReturns200AndUpdatesIt() throws Exception {
+        TestUser user = auth.createUser();
+        MockHttpSession session = auth.login(user);
+        CsrfSession authenticatedCsrf = auth.fetchCsrfSession(session);
+
+        MvcResult createNoteResult = createNote(authenticatedCsrf).andReturn();
+        NoteResponse noteResponse = objectMapper.readValue(createNoteResult.getResponse().getContentAsString(),
+                NoteResponse.class);
+        Long noteId = noteResponse.id();
+
+        mockMvc.perform(authenticatedCsrf
+                .applyTo(put("/api/notes/{noteId}", noteId).contentType(MediaType.APPLICATION_JSON).content("""
+                        {
+                            "title": "Updated Title",
+                            "content": "Updated Content"
+                        }
+                        """)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(noteId))
+                .andExpect(jsonPath("$.title").value("Updated Title"))
+                .andExpect(jsonPath("$.content").value("Updated Content"));
+    }
+
+    /**
+     * 不能更新他人的 Note
+     * 
+     * @return
+     * @throws Exception
+     */
+    @Test
+    void cannotUpdateOtherUsersNote() throws Exception {
+        TestUser userA = auth.createUser();
+        MockHttpSession sessionA = auth.login(userA);
+        CsrfSession authenticatedCsrfA = auth.fetchCsrfSession(sessionA);
+        MvcResult createNoteResultA = createNote(authenticatedCsrfA).andReturn();
+        NoteResponse noteResponseA = objectMapper.readValue(createNoteResultA.getResponse().getContentAsString(),
+                NoteResponse.class);
+        Long noteId = noteResponseA.id();
+
+        TestUser userB = auth.createUser();
+        MockHttpSession sessionB = auth.login(userB);
+        CsrfSession authenticatedCsrfB = auth.fetchCsrfSession(sessionB);
+
+        mockMvc.perform(authenticatedCsrfB
+                .applyTo(put("/api/notes/{noteId}", noteId).contentType(MediaType.APPLICATION_JSON).content("""
+                        {
+                            "title": "Updated Title",
+                            "content": "Updated Content"
+                        }
+                        """)))
+                .andExpect(status().isNotFound());
+
+        String title = jdbcTemplate.queryForObject(
+                "SELECT title FROM notes WHERE id = ?",
+                String.class,
+                noteId);
+
+        assertEquals(noteResponseA.title(), title);
+    }
+
+    /**
+     * 只返回自己的 Note
+     * 
+     * @return
+     * @throws Exception
+     */
+    @Test
+    void onlyReturnsOwnNotes() throws Exception {
+        TestUser userA = auth.createUser();
+        MockHttpSession sessionA = auth.login(userA);
+        CsrfSession authenticatedCsrfA = auth.fetchCsrfSession(sessionA);
+        MvcResult createNoteResultA = createNote(authenticatedCsrfA).andReturn();
+        NoteResponse noteResponseA = objectMapper.readValue(createNoteResultA.getResponse().getContentAsString(),
+                NoteResponse.class);
+        Long noteIdA = noteResponseA.id();
+
+        TestUser userB = auth.createUser();
+        MockHttpSession sessionB = auth.login(userB);
+        CsrfSession authenticatedCsrfB = auth.fetchCsrfSession(sessionB);
+        createNote(authenticatedCsrfB);
+
+        mockMvc.perform(authenticatedCsrfA.applyTo(get("/api/notes")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(noteIdA))
+                .andExpect(jsonPath("$[0].title").value(noteResponseA.title()))
+                .andExpect(jsonPath("$[0].content").value(noteResponseA.content()));
+    }
+
+    /**
+     * 只返回未删除的 Note
+     * 
+     * @return
+     * @throws Exception
+     */
+    @Test
+    void onlyReturnsUndeletedNotes() throws Exception {
+        TestUser user = auth.createUser();
+        MockHttpSession session = auth.login(user);
+        CsrfSession authenticatedCsrf = auth.fetchCsrfSession(session);
+        MvcResult createNoteResult = createNote(authenticatedCsrf).andReturn();
+        NoteResponse noteResponse = objectMapper.readValue(createNoteResult.getResponse().getContentAsString(),
+                NoteResponse.class);
+        Long noteId = noteResponse.id();
+
+        mockMvc.perform(authenticatedCsrf.applyTo(delete("/api/notes/{noteId}", noteId)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(authenticatedCsrf.applyTo(get("/api/notes")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /**
+     * 创建 Note
+     * 
+     * @param authenticatedCsrf
+     * @return
+     * @throws Exception
+     */
     private ResultActions createNote(CsrfSession authenticatedCsrf) throws Exception {
         return mockMvc.perform(
                 authenticatedCsrf.applyTo(post("/api/notes").contentType(MediaType.APPLICATION_JSON).content("""
