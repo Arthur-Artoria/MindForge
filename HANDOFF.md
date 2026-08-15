@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Continue development of MindForge on another computer. The immediate goal is to connect the existing Session/CSRF and Note APIs to the Next.js client and complete the first browser-visible vertical slice.
+Continue development of MindForge on another computer. The immediate engineering goal is still to connect the existing Session/CSRF and Note APIs to the Next.js client and complete the first browser-visible vertical slice. A separate throwaway Dashboard prototype now exists to choose a visual direction before production UI work expands.
 
 For product scope and acceptance requirements, read:
 
 - `docs/developer-knowledge-hub-prd.md`
-- `docs/design.md`
 - `docs/development-plan.md` (current execution order and checklists)
+- `apps/web/app/prototype/dashboard/` (temporary visual exploration, not a production specification)
 
-Do not redesign the product from this handoff; those documents remain the source of truth.
+`docs/design.md` was intentionally deleted on 2026-08-15 because the user considers it obsolete. Do not restore it or treat it as a source of truth. Product scope remains in the PRD. A durable replacement design specification has not been selected yet.
 
 ## Repository state at handoff
 
 - Repository: `https://github.com/Arthur-Artoria/MindForge.git`
 - Branch: `main`
-- Plan snapshot: branch `main`, commit `d7c670a` on 2026-08-14. Run `git log -1 --oneline` after pulling instead of assuming this commit is still current.
+- Plan snapshot: branch `main`, commit `cc9a514` on 2026-08-15. Run `git log -1 --oneline` after pulling instead of assuming this commit is still current.
 - Backend test command passed on 2026-08-14. The generated test reports recorded 22 tests with no failures or errors, including 4 Auth Session/CSRF integration tests and 14 Note Controller integration tests:
 
   ```powershell
@@ -26,7 +26,15 @@ Do not redesign the product from this handoff; those documents remain the source
 
   Result: `BUILD SUCCESSFUL`.
 
-After pulling a committed handoff update, the working tree should be clean before new development begins.
+At this handoff update, the following work is intentionally uncommitted:
+
+```text
+M  HANDOFF.md
+D  docs/design.md
+?? apps/web/app/prototype/
+```
+
+The `design.md` deletion is intentional user work. The prototype directory and this handoff update must be committed and pushed before switching computers if they need to appear on the other device. Do not discard these paths during cleanup.
 
 ## Runtime and setup
 
@@ -142,6 +150,32 @@ UserRepository
 - DELETE uses soft deletion. Flyway V6 added `deleted_at`, and V7 changed it to `timestamptz`; the previously used V2 migration was not modified.
 - Note Controller integration tests cover unauthenticated and missing-CSRF writes, validation, ownership, list filtering, update, delete, and post-delete invisibility.
 
+### Frontend and visual prototype
+
+- The production root route is still the default Create Next App page. Phase C production frontend work has not started.
+- A throwaway route was added under `apps/web/app/prototype/dashboard/` and is available at `/prototype/dashboard?variant=A`.
+- The route intentionally contains three structurally different Dashboard directions using the same realistic MindForge sample content:
+  - `A` — 工程田野日志: a chronological, editorial workspace built around evidence and weekly progress.
+  - `B` — 知识星图: a project/knowledge relationship map with a contextual inspector.
+  - `C` — 命令账本: a dense, keyboard-first operating ledger with quick capture.
+- The bottom prototype switcher changes the `variant` URL parameter and supports left/right arrow keys. It is hidden in production builds.
+- Prototype interactions are local-only: A toggles its focus action, B changes the node inspector, and C captures text in memory. Nothing calls the backend or persists data.
+- Do not promote the prototype directly into production. First choose a direction, record why it won, then rewrite the selected ideas against real Phase C data and delete the losing variants/switcher.
+
+Run it from the repository root:
+
+```powershell
+pnpm --filter web dev --hostname 127.0.0.1 --port 3000
+```
+
+Then open `http://127.0.0.1:3000/prototype/dashboard?variant=A` and switch among A/B/C.
+
+The user-level `frontend-design` Skill was installed on the original computer at `C:\Users\Artoria\.codex\skills\frontend-design`. Skills outside the repository do not transfer with Git. Install it separately on the new computer if needed:
+
+```powershell
+npx skills add https://github.com/anthropics/skills --skill frontend-design
+```
+
 ## Verified behavior and diagnostics
 
 - PostgreSQL and Spring Boot can connect, Flyway migrations run, Hibernate validates the schema, and the backend context test passes.
@@ -159,19 +193,23 @@ UserRepository
 
 - Authentication tests verify login -> `/me` -> logout -> old Session receives 401, session ID rotation on login, the real CSRF token acquisition/refresh lifecycle, and stable JSON 401/403 responses.
 - Note tests verify authenticated creation with a real CSRF token, ownership isolation, CRUD behavior, soft deletion, and list filtering.
+- On 2026-08-15, the new Dashboard prototype passed `pnpm --filter web lint` and `pnpm --filter web build` with Next.js 16.2.9.
+- All three variants were rendered in the browser. URL switching, B's inspector selection, and C's in-memory quick capture worked without browser console errors.
 
 ## Known gaps and next work
 
 The authoritative implementation order, mutable status, and acceptance checklists are maintained only in `docs/development-plan.md`. Keep this handoff focused on stable context so the two documents do not drift.
 
-The current execution target is Phase C in that plan:
+The current engineering execution target remains Phase C in that plan:
 
 1. Configure a Next.js same-origin rewrite/proxy for `/api/*`, with the backend origin supplied by environment configuration.
 2. Build the frontend API client and the real login -> CSRF refresh -> `/me` -> logout flow.
 3. Build the Notes list, create, edit, and delete pages against the existing backend API.
 4. Verify the flow in a browser, then run frontend lint/build and the backend test suite.
 
-The frontend is still the default Create Next App page. Before changing it, read `apps/web/AGENTS.md` and the relevant documentation bundled under `node_modules/next/dist/docs/`, because this repository uses Next.js 16.
+The production frontend is still the default Create Next App page; the prototype route does not complete any Phase C item. Before changing production routes, read `apps/web/AGENTS.md` and the relevant documentation bundled under `node_modules/next/dist/docs/`, because this repository uses Next.js 16.
+
+`docs/development-plan.md` still references the deleted `docs/design.md` near its introduction. Treat that reference as stale until the user selects a replacement direction; do not recreate the old document just to satisfy the link.
 
 ## Failure boundaries to preserve
 
@@ -183,6 +221,9 @@ The frontend is still the default Create Next App page. Before changing it, read
 
 ## Suggested skills for the next agent
 
+- `frontend-design` — establish the durable visual direction after the user evaluates A/B/C; do not fall back to generic Dashboard styling.
+- `prototype` — preserve the throwaway/variant discipline until a winner is chosen, then capture the decision and remove losing variants.
+- `browser:control-in-app-browser` — render and inspect the chosen direction at real desktop/mobile sizes before accepting it.
 - `tdd` — implement the login/session/logout acceptance loop test-first.
 - `diagnosing-bugs` — use for any startup, session, cookie, CSRF, CORS, or unexpected status-code failure.
 - `codebase-design` — preserve the seams between the user module, Spring Security adapter, HTTP controller, and persistence strategy.
@@ -191,4 +232,9 @@ The frontend is still the default Create Next App page. Before changing it, read
 
 ## Recommended first action on the new computer
 
-Pull the latest branch, start PostgreSQL, run the existing tests, then read `docs/development-plan.md`. Resume from Phase C, beginning with the documented Next.js 16 rewrite/proxy decision and the frontend Session/CSRF API client.
+Before leaving the original computer, commit and push the intentional `design.md` deletion, the prototype directory, and this handoff update. On the new computer, pull the latest branch and verify `git status`.
+
+Then choose one of these paths explicitly:
+
+1. Visual decision: run `/prototype/dashboard`, compare A/B/C, record the winner and useful borrowed elements, then replace the throwaway prototype with a durable design decision.
+2. Engineering continuation: start PostgreSQL, run the existing backend tests, read `docs/development-plan.md`, and resume Phase C from the Next.js 16 rewrite/proxy and Session/CSRF API client.
