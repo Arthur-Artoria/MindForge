@@ -200,16 +200,9 @@ npx skills add https://github.com/anthropics/skills --skill frontend-design
 
 The authoritative implementation order, mutable status, and acceptance checklists are maintained only in `docs/development-plan.md`. Keep this handoff focused on stable context so the two documents do not drift.
 
-The current engineering execution target remains Phase C in that plan:
-
-1. Configure a Next.js same-origin rewrite/proxy for `/api/*`, with the backend origin supplied by environment configuration.
-2. Build the frontend API client and the real login -> CSRF refresh -> `/me` -> logout flow.
-3. Build the Notes list, create, edit, and delete pages against the existing backend API.
-4. Verify the flow in a browser, then run frontend lint/build and the backend test suite.
+The current engineering execution target remains Phase C in that plan. It now begins by establishing the Spring OpenAPI contract, generated TypeScript types, the frontend request/CSRF/TanStack Query layers, and cross-project quality gates before implementing the login and Note pages. Keep the detailed order and acceptance checklist only in `docs/development-plan.md` instead of duplicating it here.
 
 The production frontend is still the default Create Next App page; the prototype route does not complete any Phase C item. Before changing production routes, read `apps/web/AGENTS.md` and the relevant documentation bundled under `node_modules/next/dist/docs/`, because this repository uses Next.js 16.
-
-`docs/development-plan.md` still references the deleted `docs/design.md` near its introduction. Treat that reference as stale until the user selects a replacement direction; do not recreate the old document just to satisfy the link.
 
 ## Failure boundaries to preserve
 
@@ -237,4 +230,4 @@ Before leaving the original computer, commit and push the intentional `design.md
 Then choose one of these paths explicitly:
 
 1. Visual decision: run `/prototype/dashboard`, compare A/B/C, record the winner and useful borrowed elements, then replace the throwaway prototype with a durable design decision.
-2. Engineering continuation: start PostgreSQL, run the existing backend tests, read `docs/development-plan.md`, and resume Phase C from the Next.js 16 rewrite/proxy and Session/CSRF API client.
+2. Engineering continuation: start PostgreSQL, run the existing backend tests, read `docs/development-plan.md`, and resume from its first unchecked Phase C infrastructure item.
