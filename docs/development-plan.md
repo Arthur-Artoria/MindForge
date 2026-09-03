@@ -35,12 +35,15 @@
 
 ## 2. 实施顺序
 
+
+
 ### 阶段 A：认证安全收尾
+
+
 
 #### A1. 锁定完整 Session 生命周期
 
 - [x] 增加一条完整集成测试：
-
   ```text
   login 200
     -> me 200
@@ -49,6 +52,8 @@
   ```
 
 - [x] 确认 logout 会使服务端 Session 失效，而不只是清空当前请求的认证信息。
+
+
 
 #### A2. 恢复登录时的 Session 安全生命周期
 
@@ -64,6 +69,8 @@ AuthenticationManager.authenticate(...)
 - [x] 保留默认的 session fixation protection，优先使用 Servlet 容器的 `changeSessionId` 行为。
 - [x] 增加测试：如果登录前已有 Session，登录成功后 Session ID 必须发生变化，同时认证状态仍可由 `/me` 读取。
 - [x] 在继续使用 controller 登录与改成 Spring Security filter 登录之间做一次明确选择；当前可以先用最小改动补齐生命周期，不必为了重构阻塞功能开发。
+
+
 
 #### A3. 完成 SPA CSRF 流程
 
@@ -99,6 +106,8 @@ POST /api/auth/logout
 - [x] 401 与 403 都返回约定的 JSON 错误结构。
 - [x] 删除 `AuthController` 中的 `System.out.println`。
 
+
+
 ### 阶段 B：Note 第一个纵向切片
 
 认证安全收尾后，不继续扩展 Auth，直接实现：
@@ -108,12 +117,16 @@ POST /api/notes
 GET  /api/notes/{id}
 ```
 
+
+
 #### B1. Module 与所有权规则
 
 - [x] 请求 DTO 不允许接收 `userId`。
 - [x] `userId` 只能从后端 `AuthenticatedUser` / `SecurityContext` 推导。
 - [x] Note 查询在 Repository seam 上同时约束 `noteId` 和 `userId`，例如 `findByIdAndUserId(...)`。
 - [x] 其他用户访问不属于自己的 Note 时返回 404，避免暴露资源是否存在。
+
+
 
 #### B2. 第一个切片的验收测试
 
@@ -123,6 +136,8 @@ GET  /api/notes/{id}
 - [x] 当前用户读取自己的 Note：200。
 - [x] 用户 B 读取用户 A 的 Note：404。
 - [x] 数据库中的 `user_id` 来自登录用户，而不是请求体。
+
+
 
 #### B3. CRUD 与软删除
 
@@ -145,6 +160,8 @@ GET  /api/notes/{id}
 - [x] 软删除不会暴露或返回已删除 Note。
 - [x] Note Controller 集成测试覆盖 14 个场景。
 
+
+
 ### 阶段 C：前后端基础设施与首个浏览器纵向闭环
 
 当前后端已经具备可用的 Auth/Note 行为和集成测试，但还没有机器可消费的 API 契约；前端仍缺少同源通信、类型生成、统一请求层、Server State 管理和测试基线。继续直接写页面会把 URL、DTO、错误和缓存规则散落到组件中。
@@ -159,15 +176,19 @@ GET  /api/notes/{id}
 - 使用 TanStack Query 管理当前用户和 Note 等 Server State；CSRF token 由独立的内存协调器管理，不进入 Query Cache 或持久化存储。
 - Spring Security 继续是认证与授权边界；前端路由保护只负责用户体验。
 
+
+
 #### C1. 建立后端 API 契约
 
-- [ ] 选定并锁定与 Spring Boot 4.1 兼容的 `springdoc-openapi` 3.x 版本；先验证应用启动、OpenAPI 输出和后端全量测试，不使用动态 `latest` 版本。
+- [x] 选定并锁定与 Spring Boot 4.1 兼容的 `springdoc-openapi` 3.x 版本；先验证应用启动、OpenAPI 输出和后端全量测试，不使用动态 `latest` 版本。
 - [ ] 从 Spring Controller、Request/Response DTO 和 Validation 约束生成 OpenAPI 3 文档。
-- [ ] 显式补充自动扫描无法完整推导的安全协议：由 `LogoutFilter` 处理的 `POST /api/auth/logout`、Session Cookie、CSRF header，以及统一的 JSON 401/403 响应。
+- [x] 显式补充自动扫描无法完整推导的安全协议：由 `LogoutFilter` 处理的 `POST /api/auth/logout`、Session Cookie、CSRF header，以及统一的 JSON 401/403 响应。
 - [ ] 确保 Auth 和 Note 当前全部端点、请求体、成功响应、错误响应与状态码都进入契约；不要把“能打开 Swagger UI”当作契约完成。
 - [ ] 明确生成物边界：Java 实现是行为来源，版本控制中的 OpenAPI snapshot 是跨项目契约产物，生成的 TypeScript 文件只允许由脚本更新。
 - [ ] 增加可重复执行的契约导出与漂移检查命令；契约变化但 snapshot/TS 类型未更新时，检查必须失败。
 - [ ] 明确 API 文档端点的环境策略：本地/测试可用于生成和检查，生产是否暴露由配置决定。
+
+
 
 #### C2. 建立前端数据访问基础设施
 
@@ -180,6 +201,8 @@ GET  /api/notes/{id}
 - [ ] 明确缓存规则：`me`、Note list/detail 属于 Server State；logout 清除用户相关 Query Cache；CSRF token、表单输入和纯 UI 状态不放入 Query Cache。
 - [ ] 在领域层暴露 `authApi`、`notesApi` 及对应 query/mutation hooks；组件不感知 CSRF header、后端 origin 或原始错误解析。
 
+
+
 #### C3. 建立跨项目质量门禁
 
 - [ ] 为前端增加独立的 `typecheck` 命令；不能只依赖 lint 或 Next.js build 间接发现类型错误。
@@ -187,6 +210,8 @@ GET  /api/notes/{id}
 - [ ] 建立浏览器 E2E 基线，用真实 Next.js rewrite、Spring Boot、Session Cookie 和 CSRF 协议验证关键路径；不能用 mock 请求代替最终验收。
 - [ ] 形成统一检查顺序：OpenAPI 漂移检查 -> 前端 typecheck/test/lint/build -> 后端全量测试 -> 关键浏览器 E2E。
 - [ ] 将上述命令写入仓库文档；引入 CI 时复用同一组命令，避免本地与 CI 形成两套流程。
+
+
 
 #### C4. 前端认证闭环
 
@@ -197,6 +222,8 @@ GET  /api/notes/{id}
 - [ ] logout mutation 携带当前 CSRF token；成功后清理用户数据和 Query Cache 并回到登录页。
 - [ ] 401、`CSRF_TOKEN_INVALID` 和普通 `ACCESS_DENIED` 在前端有不同且可验证的处理行为。
 
+
+
 #### C5. Note 页面闭环
 
 - [ ] `/notes`：通过 Note list query 读取并展示当前用户未删除的 Note。
@@ -204,6 +231,8 @@ GET  /api/notes/{id}
 - [ ] `/notes/{id}`：通过 detail query 读取，通过 update mutation 更新，并同步 detail/list cache。
 - [ ] 删除前二次确认；delete mutation 成功后移除 detail cache、刷新列表且详情不可再访问。
 - [ ] 第一版使用手动保存和简单 Markdown 输入；自动保存、幂等键、保存冲突和复杂编辑器后续单独实现。
+
+
 
 #### C6. 阶段 C 完成标准
 

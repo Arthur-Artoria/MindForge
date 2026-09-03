@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Hidden;
+
 @SpringBootApplication
 @RestController
 public class MindForgeApplication {
@@ -18,10 +20,12 @@ public class MindForgeApplication {
 	}
 
 
-	public static void main(String[] args) {
-		SpringApplication.run(MindForgeApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(MindForgeApplication.class, args);
+    }
 
+    // 隐藏这个接口
+    @Hidden
 	@GetMapping("/hello")
 	public String hello(@RequestParam(value = "name", defaultValue = "World") String name) {
 		return String.format("Hello %s!", name);

@@ -1,0 +1,324 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "OpenAPI definition", "version": "v0" },
+  "servers": [{ "url": "http://localhost:8080", "description": "Generated server url" }],
+  "paths": {
+    "/api/notes/{noteId}": {
+      "get": {
+        "tags": ["note-controller"],
+        "summary": "获取笔记",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "noteId",
+            "in": "path",
+            "description": "笔记ID",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "获取笔记成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NoteResponse" } } }
+          },
+          "401": {
+            "description": "未登录",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "404": {
+            "description": "笔记不存在",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        },
+        "security": [{ "sessionCookie": [] }]
+      },
+      "put": {
+        "tags": ["note-controller"],
+        "summary": "更新笔记",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "noteId",
+            "in": "path",
+            "description": "笔记ID",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          { "$ref": "#/components/parameters/csrfHeader" }
+        ],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateNoteRequest" } } },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "更新笔记成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NoteResponse" } } }
+          },
+          "400": {
+            "description": "请求参数无效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "401": {
+            "description": "未登录",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "403": {
+            "description": "CSRF token 无效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "404": {
+            "description": "笔记不存在",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        },
+        "security": [{ "sessionCookie": [] }]
+      },
+      "delete": {
+        "tags": ["note-controller"],
+        "summary": "删除笔记",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "noteId",
+            "in": "path",
+            "description": "笔记ID",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          { "$ref": "#/components/parameters/csrfHeader" }
+        ],
+        "responses": {
+          "204": { "description": "删除笔记成功" },
+          "401": {
+            "description": "未登录",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "403": {
+            "description": "CSRF token 无效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "404": {
+            "description": "笔记不存在",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+    "/api/notes": {
+      "get": {
+        "tags": ["note-controller"],
+        "summary": "获取笔记列表",
+        "operationId": "get_1",
+        "responses": {
+          "200": {
+            "description": "获取笔记列表成功",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/NoteResponse" } }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        },
+        "security": [{ "sessionCookie": [] }]
+      },
+      "post": {
+        "tags": ["note-controller"],
+        "summary": "创建笔记",
+        "operationId": "create",
+        "parameters": [{ "$ref": "#/components/parameters/csrfHeader" }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNoteRequest" } } },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "创建笔记成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NoteResponse" } } }
+          },
+          "400": {
+            "description": "请求参数无效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "401": {
+            "description": "未登录",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "403": {
+            "description": "CSRF token 无效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["auth-controller"],
+        "summary": "登录",
+        "operationId": "login",
+        "parameters": [{ "$ref": "#/components/parameters/csrfHeader" }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CurrentUserResponse" } } }
+          },
+          "400": {
+            "description": "请求参数无效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "401": {
+            "description": "用户名或密码错误",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          },
+          "403": {
+            "description": "CSRF token 无效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/hello": {
+      "get": {
+        "tags": ["mind-forge-application"],
+        "operationId": "hello",
+        "parameters": [
+          { "name": "name", "in": "query", "required": false, "schema": { "type": "string", "default": "World" } }
+        ],
+        "responses": { "200": { "description": "OK", "content": { "*/*": { "schema": { "type": "string" } } } } }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["auth-controller"],
+        "summary": "获取当前用户",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "获取当前用户成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CurrentUserResponse" } } }
+          },
+          "401": {
+            "description": "未登录",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+    "/api/auth/csrf": {
+      "get": {
+        "tags": ["auth-controller"],
+        "operationId": "csrf",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/CsrfTokenResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "退出当前session",
+        "operationId": "logout",
+        "parameters": [{ "$ref": "#/components/parameters/csrfHeader" }],
+        "responses": {
+          "204": { "description": "退出成功" },
+          "403": {
+            "description": "CSRF token 缺失、过期或错误",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorResponse" } } }
+          }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UpdateNoteRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxLength": 255, "minLength": 0 },
+          "content": { "type": "string" }
+        },
+        "required": ["content", "title"]
+      },
+      "NoteResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "title": { "type": "string" },
+          "content": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ApiErrorResponse": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "INVALID_REQUEST",
+              "INVALID_CREDENTIALS",
+              "AUTHENTICATION_REQUIRED",
+              "ACCESS_DENIED",
+              "CSRF_TOKEN_INVALID",
+              "RESOURCE_NOT_FOUND"
+            ]
+          },
+          "message": { "type": "string" }
+        }
+      },
+      "CreateNoteRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxLength": 255, "minLength": 0 },
+          "content": { "type": "string" }
+        },
+        "required": ["content", "title"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email", "minLength": 1 },
+          "password": { "type": "string", "minLength": 1 }
+        },
+        "required": ["email", "password"]
+      },
+      "CurrentUserResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "email": { "type": "string" },
+          "username": { "type": "string" }
+        }
+      },
+      "CsrfTokenResponse": {
+        "type": "object",
+        "properties": { "headerName": { "type": "string" }, "token": { "type": "string" } }
+      }
+    },
+    "parameters": {
+      "csrfHeader": {
+        "name": "X-CSRF-TOKEN",
+        "in": "header",
+        "description": "与当前 Session 绑定的 CSRF token",
+        "required": true,
+        "schema": { "type": "string" }
+      }
+    },
+    "securitySchemes": { "sessionCookie": { "type": "apiKey", "name": "JSESSIONID", "in": "cookie" } }
+  }
+}
