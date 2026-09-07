@@ -1,3 +1,11 @@
+import groovy.json.JsonGenerator
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.net.HttpURLConnection
+import java.net.URI
+import org.gradle.api.GradleException
+
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.0'
@@ -36,4 +44,86 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+def openApiUrl = providers.gradleProperty('openApiUrl').orElse('http://localhost:8080/v3/api-docs')
+
+def openApiSnapshot = file('../../contracts/openapi.json')
+
+def jsonGenerator = new JsonGenerator.Options()
+        .disableUnicodeEscaping()
+        .build()
+
+def formatOpenApi = { String json ->
+    def parsed = new JsonSlurper().parseText(json)
+    return JsonOutput.prettyPrint(jsonGenerator.toJson(parsed)) + '\n'
+}
+
+def fetchOpenApi = {
+  HttpURLConnection connection = (HttpURLConnection) URI.create(openApiUrl.get()).toURL().openConnection()
+
+  connection.connectTimeout = 5_000
+  connection.readTimeout = 30_000
+  connection.setRequestProperty('Accept', 'application/json')
+
+  try {
+    int status = connection.responseCode
+
+    if (status != 200) {
+      throw new GradleException(
+        "Failed to fetch OpenAPI from ${openApiUrl.get()}: HTTP ${status}"
+      )
+    }
+
+    return connection.inputStream.withCloseable {
+      it.getText('UTF-8')
+    }
+  } finally {
+    connection.disconnect()
+  }
+}
+
+tasks.register('openApiExport') {
+    group = 'openapi'
+    description = 'Exports the running backend OpenAPI document to contracts/openapi.json'
+
+    inputs.property('openApiUrl', openApiUrl)
+    outputs.file(openApiSnapshot)
+
+    // URL 是外部运行时状态，Gradle 无法判断它是否改变。
+    outputs.upToDateWhen { false }
+
+    doLast {
+        String liveJson = fetchOpenApi()
+        String formattedJson = formatOpenApi(liveJson)
+
+        openApiSnapshot.parentFile.mkdirs()
+        openApiSnapshot.setText(formattedJson, 'UTF-8')
+
+        println "Exported OpenAPI snapshot to ${openApiSnapshot}"
+    }
+}
+
+tasks.register('openApiCheck') {
+    group = 'verification'
+    description = 'Fails when the running OpenAPI document differs from the snapshot'
+
+    inputs.property('openApiUrl', openApiUrl)
+    inputs.file(openApiSnapshot)
+
+    doLast {
+        def snapshotJson = new JsonSlurper().parseText(
+                openApiSnapshot.getText('UTF-8')
+        )
+
+        def liveJson = new JsonSlurper().parseText(fetchOpenApi())
+
+        if (snapshotJson != liveJson) {
+            throw new GradleException(
+                    'OpenAPI snapshot is stale. Run openApiExport and review the diff.'
+            )
+        }
+
+        println 'OpenAPI snapshot is up to date.'
+    }
 }
